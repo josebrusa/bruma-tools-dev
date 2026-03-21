@@ -66,17 +66,12 @@ export function BrandingPage() {
   if (!selectedTenantId) return <p>Select a tenant in the header.</p>;
   if (loading) return <p>Loading branding…</p>;
 
-  const previewOk =
-    logoUrl.trim().length > 0 &&
-    (() => {
-      try {
-        // eslint-disable-next-line no-new
-        new URL(logoUrl.trim());
-        return true;
-      } catch {
-        return false;
-      }
-    })();
+  let previewOk = false;
+  try {
+    previewOk = Boolean(logoUrl.trim() && new URL(logoUrl.trim()).href);
+  } catch {
+    previewOk = false;
+  }
 
   return (
     <div>

@@ -1,6 +1,6 @@
 # bruma-tools-dev
 
-Monorepo MVP layout: `apps/api` (HTTP API), `apps/worker` (queue consumer placeholder), `apps/web` (Vite + React dashboard). Sprint planning: [planning/README.md](planning/README.md).
+Monorepo MVP layout: `apps/api` (HTTP API), `apps/worker` (BullMQ email send worker), `apps/web` (Vite + React dashboard). Sprint planning: [planning/README.md](planning/README.md).
 
 ## Local development
 
@@ -12,9 +12,11 @@ Monorepo MVP layout: `apps/api` (HTTP API), `apps/worker` (queue consumer placeh
 
 API defaults to `http://localhost:3000`, dashboard to `http://localhost:5173`. Set `ADMIN_API_KEY` in `.env` and use it as `X-API-Key` from the web app.
 
+**Dispatch (Sprint 3):** set `REDIS_URL` for `POST /v1/dispatch`. The worker sends via Resend when `RESEND_API_KEY` is set; without it, jobs fail fast with a clear error on the dispatch row.
+
 **Staging host** (Sprint 1 platform): provision separately and point `VITE_API_BASE_URL` / `ALLOWED_ORIGINS` at that environment; see `docs/cicd.md` and `docs/test-strategy.md`.
 
-**Staging-style compose:** `docker-compose.staging.yml` documents ports and required env vars (`STAGING_*`); keep real secrets in a manager, not in git.
+**Staging-style compose:** `docker-compose.staging.yml` documents ports and required env vars (`STAGING_*`); keep real secrets in a manager, not in git. Rollback notes: [docs/staging-rollback.md](docs/staging-rollback.md).
 
 **Tenant API keys (Sprint 2):** besides `ADMIN_API_KEY`, you can create per-tenant keys via `POST /v1/tenants/:tenantId/api-keys` (returns the secret once). Those keys only allow access to that tenant’s routes.
 
