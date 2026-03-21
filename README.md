@@ -20,6 +20,8 @@ API defaults to `http://localhost:3000`, dashboard to `http://localhost:5173`. S
 
 **Tenant API keys (Sprint 2):** besides `ADMIN_API_KEY`, you can create per-tenant keys via `POST /v1/tenants/:tenantId/api-keys` (returns the secret once). Those keys only allow access to that tenant’s routes.
 
+**Logs & webhooks (Sprint 4):** set `WEBHOOK_SECRET` for `POST /v1/webhooks/provider` (HMAC-SHA256 of the raw JSON body). Tune `API_RATE_LIMIT_MAX`, `API_RATE_LIMIT_MAX_TENANT`, and `API_RATE_LIMIT_WINDOW_MS` as needed. Trace a failed send: [docs/operator-debugging-failed-send.md](docs/operator-debugging-failed-send.md). Draft runbook: [docs/operations-runbook-v1.md](docs/operations-runbook-v1.md).
+
 **OpenAPI (Sprint 5):** with the API running, open `http://localhost:3000/docs` when docs are enabled (default in development; in production set `OPENAPI_DOCS_ENABLED=true` or leave disabled). Spec source: `apps/api/openapi/openapi.yaml`.
 
 **Operators:** see [docs/operator-handover.md](docs/operator-handover.md) and [docs/glossary.md](docs/glossary.md).
