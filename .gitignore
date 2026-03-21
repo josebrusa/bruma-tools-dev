@@ -1,0 +1,16 @@
+# Internal scope documents (Word); keep planning/ markdown as the remote-friendly source of truth.
+proyecto/
+
+# Cursor local project metadata (keep out of git)
+.cursor/
+
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+coverage/
+playwright-report/
+test-results/
+.turbo/

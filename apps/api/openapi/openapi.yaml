@@ -1,0 +1,194 @@
+openapi: 3.1.0
+info:
+  title: Bruma API — Sprint 1 fragment
+  version: 0.1.0
+  description: |
+    Tenant and domain management (DOC-BE-01 slice). Authenticate with header `X-API-Key`.
+servers:
+  - url: http://localhost:3000
+    description: Local
+paths:
+  /health:
+    get:
+      summary: Liveness / readiness style probe
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  database:
+                    type: string
+                    enum: [up, down]
+  /v1/tenants:
+    get:
+      summary: List tenants
+      responses:
+        "200":
+          description: Tenant collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tenant"
+    post:
+      summary: Create tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "400":
+          description: Validation error
+        "409":
+          description: Slug conflict
+  /v1/tenants/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get tenant
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          description: Not found
+    patch:
+      summary: Update tenant (metadata and is_active)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantPatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+  /v1/tenants/{tenantId}/domains:
+    post:
+      summary: Register domain for tenant
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fqdn]
+              properties:
+                fqdn:
+                  type: string
+                  example: mail.example.com
+      responses:
+        "201":
+          description: Domain row created (DKIM material generated server-side)
+        "403":
+          description: Tenant inactive
+  /v1/tenants/{tenantId}/domains/{domainId}/dns-records:
+    get:
+      summary: SPF / DKIM / DMARC records for operators
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Structured DNS bundle
+  /v1/tenants/{tenantId}/domains/{domainId}/verify:
+    post:
+      summary: Trigger manual DNS verification (DKIM TXT)
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Verified
+        "422":
+          description: Verification failed (see verification_status on body)
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        contact: { type: [string, "null"] }
+        timezone: { type: [string, "null"] }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TenantCreate:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        contact: { type: string }
+        timezone: { type: string }
+    TenantPatch:
+      type: object
+      properties:
+        name: { type: string }
+        contact: { type: [string, "null"] }
+        timezone: { type: [string, "null"] }
+        is_active: { type: boolean }
+security:
+  - ApiKeyAuth: []
