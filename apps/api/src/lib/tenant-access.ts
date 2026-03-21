@@ -1,11 +1,16 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { forbidden } from "./errors.js";
+import { badRequest, forbidden } from "./errors.js";
+import { isUuid } from "./uuid.js";
 
 export function ensureTenantAccess(
   req: FastifyRequest,
   reply: FastifyReply,
   tenantId: string,
 ): boolean {
+  if (!isUuid(tenantId)) {
+    void badRequest(reply, "Invalid tenant id");
+    return false;
+  }
   const auth = req.auth;
   if (!auth) {
     void forbidden(reply, "Missing authorization context");

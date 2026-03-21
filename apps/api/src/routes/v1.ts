@@ -14,7 +14,10 @@ import { fqdnSchema, normalizeFqdn, slugSchema } from "../lib/tenant-domain.js";
 import { buildDnsBundle } from "../services/dns-records.js";
 import { verifyDomainDns } from "../services/dns-verify.js";
 import { ensureAdmin, ensureTenantAccess } from "../lib/tenant-access.js";
+import { isUuid } from "../lib/uuid.js";
 import { registerSprint2Routes } from "./sprint2.js";
+import { registerSprint4Routes } from "./sprint4.js";
+import { registerSprint3Routes } from "./sprint3.js";
 
 const createTenantBody = z.object({
   slug: slugSchema,
@@ -106,6 +109,9 @@ export async function registerV1Routes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>("/v1/tenants/:id", async (req, reply) => {
+    if (!isUuid(req.params.id)) {
+      return badRequest(reply, "Invalid tenant id");
+    }
     if (!ensureTenantAccess(req, reply, req.params.id)) return;
     const [row] = await db
       .select()
@@ -119,6 +125,9 @@ export async function registerV1Routes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>(
     "/v1/tenants/:id",
     async (req, reply) => {
+      if (!isUuid(req.params.id)) {
+        return badRequest(reply, "Invalid tenant id");
+      }
       if (!ensureTenantAccess(req, reply, req.params.id)) return;
       const parsed = patchTenantBody.safeParse(req.body);
       if (!parsed.success) {
@@ -303,4 +312,6 @@ export async function registerV1Routes(app: FastifyInstance) {
   });
 
   await registerSprint2Routes(app);
+  await registerSprint3Routes(app);
+  await registerSprint4Routes(app);
 }

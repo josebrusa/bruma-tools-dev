@@ -1,0 +1,42 @@
+# Manual production promotion gate — run after QA sign-off (Sprint 5 platform).
+# Same checks as CI; blocks human deploy steps if this workflow is not green.
+
+name: Production gate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  full-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: pnpm exec playwright install chromium
+
+      - name: E2E smoke
+        working-directory: apps/web
+        run: pnpm exec playwright test

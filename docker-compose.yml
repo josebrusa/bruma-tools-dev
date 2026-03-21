@@ -36,6 +36,7 @@ services:
       REDIS_URL: redis://redis:6379
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-local-key}
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -43,6 +44,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   worker:
     build:
@@ -50,9 +61,19 @@ services:
       dockerfile: apps/worker/Dockerfile
     environment:
       REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://bruma:bruma@postgres:5432/bruma
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"process.exit(0)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   web:
     build:
@@ -63,7 +84,18 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:80/ >/dev/null || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 volumes:
   pgdata:

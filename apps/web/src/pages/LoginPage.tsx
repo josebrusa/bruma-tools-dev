@@ -32,6 +32,8 @@ export function LoginPage() {
 
   return (
     <div
+      role="main"
+      aria-label="Sign in"
       style={{
         minHeight: "100vh",
         display: "grid",
@@ -43,6 +45,7 @@ export function LoginPage() {
     >
       <form
         onSubmit={onSubmit}
+        aria-describedby="login-hint"
         style={{
           width: "min(400px, 92vw)",
           padding: "1.75rem",
@@ -52,16 +55,23 @@ export function LoginPage() {
         }}
       >
         <h1 style={{ marginTop: 0, fontSize: "1.35rem" }}>Bruma dashboard</h1>
-        <p style={{ color: "#94a3b8", fontSize: 14 }}>
+        <p id="login-hint" style={{ color: "#94a3b8", fontSize: 14 }}>
           Sign in with your admin API key (same value as{" "}
           <code style={{ color: "#cbd5e1" }}>ADMIN_API_KEY</code> on the API).
         </p>
-        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+        <label
+          htmlFor="api-key-input"
+          style={{ display: "block", fontSize: 13, marginBottom: 6, marginTop: 12 }}
+        >
           API key
         </label>
         <input
+          id="api-key-input"
           type="password"
+          name="api-key"
           autoComplete="off"
+          aria-invalid={error ? "true" : "false"}
+          aria-describedby={error ? "login-error" : undefined}
           value={value}
           onChange={(ev) => setValue(ev.target.value)}
           style={{
@@ -75,7 +85,11 @@ export function LoginPage() {
           }}
         />
         {error ? (
-          <p style={{ color: "#fca5a5", fontSize: 14, marginTop: "0.75rem" }}>
+          <p
+            id="login-error"
+            role="alert"
+            style={{ color: "#fca5a5", fontSize: 14, marginTop: "0.75rem" }}
+          >
             {error}
           </p>
         ) : null}

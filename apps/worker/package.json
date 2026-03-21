@@ -11,7 +11,12 @@
     "test": "node -e \"console.log('no tests')\""
   },
   "dependencies": {
-    "dotenv": "^16.4.7"
+    "@bruma/api": "workspace:*",
+    "bullmq": "^5.34.5",
+    "ioredis": "^5.4.2",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.3",
+    "resend": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -98,10 +98,6 @@ function mapVersion(row: typeof emailTemplateVersions.$inferSelect) {
   };
 }
 
-const createEventMappingBody = z.object({
-  event_key: z.string().min(1).max(200),
-});
-
 export async function registerSprint2Routes(app: FastifyInstance) {
   app.get<{ Params: { tenantId: string } }>(
     "/v1/tenants/:tenantId/domains",
@@ -123,30 +119,6 @@ export async function registerSprint2Routes(app: FastifyInstance) {
           created_at: r.createdAt.toISOString(),
           updated_at: r.updatedAt.toISOString(),
         })),
-      });
-    },
-  );
-
-  app.post<{ Params: { tenantId: string } }>(
-    "/v1/tenants/:tenantId/event-mappings",
-    async (req, reply) => {
-      if (!ensureTenantAccess(req, reply, req.params.tenantId)) return;
-      const parsed = createEventMappingBody.safeParse(req.body);
-      if (!parsed.success) {
-        return badRequest(reply, "Validation failed", parsed.error.flatten());
-      }
-      const [row] = await db
-        .insert(eventMappings)
-        .values({
-          tenantId: req.params.tenantId,
-          eventKey: parsed.data.event_key,
-        })
-        .returning();
-      return reply.status(201).send({
-        id: row!.id,
-        tenant_id: row!.tenantId,
-        event_key: row!.eventKey,
-        created_at: row!.createdAt.toISOString(),
       });
     },
   );
@@ -195,7 +167,29 @@ export async function registerSprint2Routes(app: FastifyInstance) {
       const [mCount] = await db
         .select({ c: count() })
         .from(eventMappings)
-        .where(eq(eventMappings.tenantId, tid));
+        .innerJoin(
+          emailTemplates,
+          eq(eventMappings.templateId, emailTemplates.id),
+        )
+        .innerJoin(
+          emailTemplateVersions,
+          and(
+            eq(emailTemplateVersions.templateId, emailTemplates.id),
+            eq(emailTemplateVersions.isActive, true),
+          ),
+        )
+        .innerJoin(
+          senderIdentities,
+          eq(eventMappings.senderId, senderIdentities.id),
+        )
+        .innerJoin(domains, eq(senderIdentities.domainId, domains.id))
+        .where(
+          and(
+            eq(eventMappings.tenantId, tid),
+            eq(eventMappings.isActive, true),
+            eq(domains.verificationStatus, "verified"),
+          ),
+        );
 
       return reply.send({
         domain_registered: (dCount?.c ?? 0) > 0,

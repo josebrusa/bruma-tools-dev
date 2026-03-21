@@ -25,6 +25,8 @@ function mapStatusToMessage(status: number): string {
       return "This record already exists or conflicts with another.";
     case 422:
       return "The operation could not be completed. Review the details and try again.";
+    case 429:
+      return "Too many requests. Wait a moment and try again.";
     case 503:
       return "The service is temporarily unavailable. Try again shortly.";
     default:
@@ -347,4 +349,207 @@ export async function publishTemplateVersion(
     },
   );
   return parseJsonOrThrow<TemplateVersionRow>(res);
+}
+
+export async function getBranding(
+  apiKey: string,
+  tenantId: string,
+): Promise<{
+  tenant_id: string;
+  logo_url: string;
+  color_primario: string;
+  updated_at: string;
+} | null> {
+  const res = await apiFetch(`/v1/tenants/${tenantId}/branding`, { apiKey });
+  if (res.status === 404) return null;
+  return parseJsonOrThrow(res);
+}
+
+export async function previewTemplateVersion(
+  apiKey: string,
+  tenantId: string,
+  templateId: string,
+  versionId: string,
+  variables: Record<string, unknown>,
+): Promise<{ html: string }> {
+  const params = new URLSearchParams({
+    variables: JSON.stringify(variables),
+  });
+  const res = await apiFetch(
+    `/v1/tenants/${tenantId}/templates/${templateId}/versions/${versionId}/preview?${params.toString()}`,
+    { apiKey },
+  );
+  const body = await parseJsonOrThrow<{ html: string }>(res);
+  return { html: body.html };
+}
+
+export type EventMappingRow = {
+  id: string;
+  tenant_id: string;
+  event_key: string;
+  template_id: string | null;
+  sender_id: string | null;
+  is_active: boolean;
+  template_published: boolean;
+  created_at: string;
+  updated_at: string;
+  template_name: string | null;
+};
+
+export async function listEventMappings(
+  apiKey: string,
+  tenantId: string,
+): Promise<EventMappingRow[]> {
+  const res = await apiFetch(`/v1/tenants/${tenantId}/event-mappings`, {
+    apiKey,
+  });
+  const data = await parseJsonOrThrow<{ data: EventMappingRow[] }>(res);
+  return data.data;
+}
+
+export async function createEventMapping(
+  apiKey: string,
+  tenantId: string,
+  payload: {
+    event_key: string;
+    template_id: string;
+    sender_id: string;
+    is_active?: boolean;
+  },
+): Promise<EventMappingRow> {
+  const res = await apiFetch(`/v1/tenants/${tenantId}/event-mappings`, {
+    method: "POST",
+    apiKey,
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow<EventMappingRow>(res);
+}
+
+export async function updateEventMapping(
+  apiKey: string,
+  tenantId: string,
+  mappingId: string,
+  payload: Partial<{
+    event_key: string;
+    template_id: string;
+    sender_id: string;
+    is_active: boolean;
+  }>,
+): Promise<EventMappingRow> {
+  const res = await apiFetch(
+    `/v1/tenants/${tenantId}/event-mappings/${mappingId}`,
+    {
+      method: "PATCH",
+      apiKey,
+      body: JSON.stringify(payload),
+    },
+  );
+  return parseJsonOrThrow<EventMappingRow>(res);
+}
+
+export async function deleteEventMapping(
+  apiKey: string,
+  tenantId: string,
+  mappingId: string,
+): Promise<void> {
+  const res = await apiFetch(
+    `/v1/tenants/${tenantId}/event-mappings/${mappingId}`,
+    { method: "DELETE", apiKey },
+  );
+  if (res.status === 204) return;
+  await parseJsonOrThrow(res);
+}
+
+export type DispatchTimelineEvent = {
+  id: string;
+  event_type: string;
+  occurred_at: string;
+};
+
+export type LogEntryRow = {
+  id: string;
+  occurred_at: string;
+  event_name: string;
+  dispatch_id: string;
+  tenant_id: string;
+  dispatch_status: string;
+  recipient: string | null;
+  event_key: string | null;
+  correlation_id: string | null;
+};
+
+export type EmailDispatchRow = {
+  id: string;
+  tenant_id: string;
+  status: string;
+  event_key: string | null;
+  recipient_email: string;
+  template_version_id: string | null;
+  sender_id: string | null;
+  subject: string | null;
+  provider_message_id: string | null;
+  correlation_id: string | null;
+  last_error: string | null;
+  idempotency_key: string | null;
+  created_at: string;
+  updated_at: string;
+  events?: DispatchTimelineEvent[];
+};
+
+export async function listLogs(
+  apiKey: string,
+  params: {
+    tenantId: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  },
+): Promise<{ data: LogEntryRow[]; next_cursor: string | null }> {
+  const q = new URLSearchParams();
+  q.set("tenant_id", params.tenantId);
+  if (params.status?.trim()) q.set("status", params.status.trim());
+  if (params.from?.trim()) q.set("from", params.from.trim());
+  if (params.to?.trim()) q.set("to", params.to.trim());
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.cursor?.trim()) q.set("cursor", params.cursor.trim());
+  const res = await apiFetch(`/v1/logs?${q.toString()}`, { apiKey });
+  return parseJsonOrThrow(res);
+}
+
+export async function getEmailDispatch(
+  apiKey: string,
+  tenantId: string,
+  dispatchId: string,
+): Promise<EmailDispatchRow> {
+  const res = await apiFetch(
+    `/v1/tenants/${tenantId}/email-dispatches/${dispatchId}`,
+    { apiKey },
+  );
+  return parseJsonOrThrow<EmailDispatchRow>(res);
+}
+
+export async function dispatchEmail(
+  apiKey: string,
+  payload: {
+    tenant_id: string;
+    event: string;
+    recipient: { email: string };
+    variables?: Record<string, unknown>;
+    idempotency_key?: string;
+  },
+): Promise<{ message_id: string; status: string; idempotent?: boolean }> {
+  const res = await apiFetch("/v1/dispatch", {
+    method: "POST",
+    apiKey,
+    body: JSON.stringify({
+      tenant_id: payload.tenant_id,
+      event: payload.event,
+      recipient: payload.recipient,
+      variables: payload.variables ?? {},
+      idempotency_key: payload.idempotency_key,
+    }),
+  });
+  return parseJsonOrThrow(res);
 }

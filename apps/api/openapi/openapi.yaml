@@ -1,16 +1,33 @@
 openapi: 3.1.0
 info:
-  title: Bruma API — Sprint 1 fragment
-  version: 0.1.0
+  title: Bruma API
+  version: 1.0.0
   description: |
-    Tenant and domain management (DOC-BE-01 slice). Authenticate with header `X-API-Key`.
+    MVP HTTP API (tenants, domains, templates, dispatch, webhooks, logs). Authenticate with `X-API-Key`
+    (admin key or per-tenant key). Webhook endpoint uses HMAC signature headers instead of API keys.
+
+    **Swagger UI:** `GET /docs` when `OPENAPI_DOCS_ENABLED` is true or outside production (see deployment config).
 servers:
   - url: http://localhost:3000
     description: Local
+tags:
+  - name: Health
+  - name: Tenants
+  - name: Domains
+  - name: Setup
+  - name: ApiKeys
+  - name: Senders
+  - name: Branding
+  - name: Templates
+  - name: EventMappings
+  - name: Dispatch
+  - name: Webhooks
+  - name: Logs
 paths:
   /health:
     get:
-      summary: Liveness / readiness style probe
+      tags: [Health]
+      summary: Liveness probe
       security: []
       responses:
         "200":
@@ -20,18 +37,15 @@ paths:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: ok
-                  database:
-                    type: string
-                    enum: [up, down]
+                  status: { type: string, example: ok }
+                  database: { type: string, enum: [up, down] }
   /v1/tenants:
     get:
-      summary: List tenants
+      tags: [Tenants]
+      summary: List tenants (single item for tenant keys; all for admin)
       responses:
         "200":
-          description: Tenant collection
+          description: OK
           content:
             application/json:
               schema:
@@ -39,68 +53,74 @@ paths:
                 properties:
                   data:
                     type: array
-                    items:
-                      $ref: "#/components/schemas/Tenant"
+                    items: { $ref: "#/components/schemas/Tenant" }
     post:
-      summary: Create tenant
+      tags: [Tenants]
+      summary: Create tenant (admin only)
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/TenantCreate"
+            schema: { $ref: "#/components/schemas/TenantCreate" }
       responses:
         "201":
           description: Created
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/Tenant"
-        "400":
-          description: Validation error
-        "409":
-          description: Slug conflict
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "400": { description: Validation error }
+        "409": { description: Slug conflict }
   /v1/tenants/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
     get:
+      tags: [Tenants]
       summary: Get tenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
       responses:
         "200":
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/Tenant"
-        "404":
-          description: Not found
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "404": { description: Not found }
     patch:
-      summary: Update tenant (metadata and is_active)
+      tags: [Tenants]
+      summary: Patch tenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
       requestBody:
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/TenantPatch"
+            schema: { $ref: "#/components/schemas/TenantPatch" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tenant" }
+  /v1/tenants/{tenantId}/domains:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [Domains]
+      summary: List domains for tenant
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Tenant"
-  /v1/tenants/{tenantId}/domains:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Domain" }
     post:
-      summary: Register domain for tenant
-      parameters:
-        - name: tenantId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      tags: [Domains]
+      summary: Register domain (creates DKIM material)
       requestBody:
         required: true
         content:
@@ -109,60 +129,499 @@ paths:
               type: object
               required: [fqdn]
               properties:
-                fqdn:
-                  type: string
-                  example: mail.example.com
+                fqdn: { type: string, example: mail.example.com }
       responses:
         "201":
-          description: Domain row created (DKIM material generated server-side)
-        "403":
-          description: Tenant inactive
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
+        "403": { description: Tenant inactive }
+        "409": { description: Duplicate fqdn for tenant }
   /v1/tenants/{tenantId}/domains/{domainId}/dns-records:
     get:
-      summary: SPF / DKIM / DMARC records for operators
+      tags: [Domains]
+      summary: SPF / DKIM / DMARC bundle for operators
       parameters:
-        - name: tenantId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: domainId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/DomainIdPath"
       responses:
         "200":
-          description: Structured DNS bundle
+          description: DNS records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain_id: { type: string, format: uuid }
+                  fqdn: { type: string }
+                  records:
+                    type: array
+                    items: { type: object, additionalProperties: true }
   /v1/tenants/{tenantId}/domains/{domainId}/verify:
     post:
-      summary: Trigger manual DNS verification (DKIM TXT)
+      tags: [Domains]
+      summary: Run DNS verification (DKIM TXT)
       parameters:
-        - name: tenantId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: domainId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/DomainIdPath"
       responses:
         "200":
-          description: Verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
         "422":
-          description: Verification failed (see verification_status on body)
+          description: Verification failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Domain" }
+  /v1/tenants/{tenantId}/setup-checklist:
+    get:
+      tags: [Setup]
+      summary: Onboarding checklist flags
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SetupChecklist" }
+  /v1/tenants/{tenantId}/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [ApiKeys]
+      summary: List API key metadata (no secrets)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApiKeyMeta" }
+    post:
+      tags: [ApiKeys]
+      summary: Issue API key (secret returned once)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 120 }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiKeyCreated" }
+  /v1/tenants/{tenantId}/api-keys/{keyId}:
+    delete:
+      tags: [ApiKeys]
+      summary: Revoke API key
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Revoked }
+        "404": { description: Not found }
+  /v1/tenants/{tenantId}/senders:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [Senders]
+      summary: List senders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Sender" }
+    post:
+      tags: [Senders]
+      summary: Create sender (domain must be verified)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SenderCreate" }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sender" }
+  /v1/tenants/{tenantId}/senders/{senderId}:
+    get:
+      tags: [Senders]
+      summary: Get sender
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: senderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sender" }
+    patch:
+      tags: [Senders]
+      summary: Update sender
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: senderId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SenderPatch" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sender" }
+  /v1/tenants/{tenantId}/branding:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [Branding]
+      summary: Get branding profile
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Branding" }
+        "404": { description: Not configured }
+    post:
+      tags: [Branding]
+      summary: Upsert branding profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BrandingBody" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Branding" }
+  /v1/tenants/{tenantId}/templates:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [Templates]
+      summary: List templates (includes active_version_id when set)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/TemplateSummary" }
+    post:
+      tags: [Templates]
+      summary: Create template shell
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: [string, "null"] }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+  /v1/tenants/{tenantId}/templates/{templateId}/versions:
+    get:
+      tags: [Templates]
+      summary: List template versions
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/TemplateVersion" }
+    post:
+      tags: [Templates]
+      summary: Create template version (Handlebars body)
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body_html]
+              properties:
+                body_html: { type: string }
+                variable_names:
+                  type: array
+                  items: { type: string }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateVersion" }
+  /v1/tenants/{tenantId}/templates/{templateId}/publish:
+    post:
+      tags: [Templates]
+      summary: Publish a version (single active)
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version_id]
+              properties:
+                version_id: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateVersion" }
+  /v1/tenants/{tenantId}/templates/{templateId}/versions/{versionId}/preview:
+    get:
+      tags: [Templates]
+      summary: Render preview HTML
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "#/components/parameters/TemplateIdPath"
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: variables
+          in: query
+          required: false
+          schema:
+            type: string
+            description: JSON object string, default "{}"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  template_id: { type: string, format: uuid }
+                  version_id: { type: string, format: uuid }
+                  html: { type: string }
+  /v1/tenants/{tenantId}/event-mappings:
+    parameters:
+      - $ref: "#/components/parameters/TenantIdPath"
+    get:
+      tags: [EventMappings]
+      summary: List event mappings with template names
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/EventMappingRow" }
+    post:
+      tags: [EventMappings]
+      summary: Create event mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventMappingCreate" }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventMapping" }
+        "409": { description: Duplicate event_key for tenant }
+  /v1/tenants/{tenantId}/event-mappings/{mappingId}:
+    patch:
+      tags: [EventMappings]
+      summary: Update event mapping
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: mappingId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventMappingPatch" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventMapping" }
+    delete:
+      tags: [EventMappings]
+      summary: Delete event mapping
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: mappingId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+  /v1/tenants/{tenantId}/email-dispatches/{dispatchId}:
+    get:
+      tags: [Dispatch]
+      summary: Get dispatch row by id
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - name: dispatchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DispatchDetail" }
+  /v1/dispatch:
+    post:
+      tags: [Dispatch]
+      summary: Enqueue email dispatch (requires Redis / worker)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DispatchRequest" }
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [message_id, status]
+                    properties:
+                      message_id: { type: string, format: uuid }
+                      status: { type: string }
+                  - type: object
+                    required: [message_id, status, idempotent]
+                    properties:
+                      message_id: { type: string, format: uuid }
+                      status: { type: string }
+                      idempotent: { type: boolean, const: true }
+        "503": { description: REDIS_URL not configured }
+  /v1/webhooks/provider:
+    post:
+      tags: [Webhooks]
+      summary: Provider delivery webhook (HMAC-signed raw body)
+      description: |
+        Send raw JSON body. Signature: `X-Webhook-Signature` or `X-Bruma-Webhook-Signature` (HMAC-SHA256 hex of body using `WEBHOOK_SECRET`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookPayload" }
+      responses:
+        "204": { description: Applied }
+        "400": { description: Invalid JSON or validation }
+        "401": { description: Bad signature }
+        "404": { description: Unknown provider_message_id }
+        "403": { description: Tenant inactive — no update applied }
+        "503": { description: WEBHOOK_SECRET not set }
+  /v1/logs:
+    get:
+      tags: [Logs]
+      summary: Delivery event log (tenant scoping enforced)
+      description: |
+        Tenant keys are scoped to their tenant. Admin must pass `tenant_id` (UUID) query parameter.
+      parameters:
+        - name: tenant_id
+          in: query
+          schema: { type: string, format: uuid }
+          description: Required when using admin API key
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogPage" }
+        "400": { description: Invalid tenant_id or cursor }
+        "429":
+          description: Rate limited (per API key and per tenant)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds until the client may retry
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
+  parameters:
+    TenantIdPath:
+      name: tenantId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DomainIdPath:
+      name: domainId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TemplateIdPath:
+      name: templateId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     Tenant:
       type: object
@@ -190,5 +649,213 @@ components:
         contact: { type: [string, "null"] }
         timezone: { type: [string, "null"] }
         is_active: { type: boolean }
+    Domain:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        fqdn: { type: string }
+        verification_status: { type: string }
+        verification_error: { type: [string, "null"] }
+        verified_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SetupChecklist:
+      type: object
+      properties:
+        domain_registered: { type: boolean }
+        domain_verified: { type: boolean }
+        sender_created: { type: boolean }
+        branding_configured: { type: boolean }
+        template_published: { type: boolean }
+        event_mapped: { type: boolean }
+    ApiKeyMeta:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key_prefix: { type: string }
+        revoked_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    ApiKeyCreated:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key_prefix: { type: string }
+        secret: { type: string, description: Shown once }
+        created_at: { type: string, format: date-time }
+    Sender:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        domain_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        reply_to: { type: [string, "null"], format: email }
+        state: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SenderCreate:
+      type: object
+      required: [domain_id, email, display_name]
+      properties:
+        domain_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        reply_to: { type: [string, "null"], format: email }
+    SenderPatch:
+      type: object
+      properties:
+        display_name: { type: string }
+        reply_to: { type: [string, "null"], format: email }
+        state: { type: string, enum: [active, inactive] }
+    Branding:
+      type: object
+      properties:
+        tenant_id: { type: string, format: uuid }
+        logo_url: { type: string, format: uri }
+        color_primario: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        updated_at: { type: string, format: date-time }
+    BrandingBody:
+      type: object
+      required: [logo_url, color_primario]
+      properties:
+        logo_url: { type: string, format: uri }
+        color_primario: { type: string }
+    Template:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    TemplateSummary:
+      allOf:
+        - { $ref: "#/components/schemas/Template" }
+        - type: object
+          properties:
+            active_version_id: { type: [string, "null"], format: uuid }
+    TemplateVersion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        template_id: { type: string, format: uuid }
+        body_html: { type: string }
+        variable_names:
+          type: array
+          items: { type: string }
+        is_active: { type: boolean }
+        version: { type: integer }
+        created_at: { type: string, format: date-time }
+    EventMappingCreate:
+      type: object
+      required: [event_key, template_id, sender_id]
+      properties:
+        event_key: { type: string }
+        template_id: { type: string, format: uuid }
+        sender_id: { type: string, format: uuid }
+        is_active: { type: boolean, default: true }
+    EventMappingPatch:
+      type: object
+      properties:
+        event_key: { type: string }
+        template_id: { type: string, format: uuid }
+        sender_id: { type: string, format: uuid }
+        is_active: { type: boolean }
+    EventMapping:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        event_key: { type: string }
+        template_id: { type: [string, "null"], format: uuid }
+        sender_id: { type: [string, "null"], format: uuid }
+        is_active: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EventMappingRow:
+      allOf:
+        - { $ref: "#/components/schemas/EventMapping" }
+        - type: object
+          properties:
+            template_name: { type: [string, "null"] }
+            template_published: { type: boolean }
+    Dispatch:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenant_id: { type: string, format: uuid }
+        status: { type: string }
+        event_key: { type: [string, "null"] }
+        recipient_email: { type: string }
+        template_version_id: { type: [string, "null"], format: uuid }
+        sender_id: { type: [string, "null"], format: uuid }
+        subject: { type: [string, "null"] }
+        provider_message_id: { type: [string, "null"] }
+        correlation_id: { type: [string, "null"] }
+        last_error: { type: [string, "null"] }
+        idempotency_key: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DispatchDetail:
+      allOf:
+        - { $ref: "#/components/schemas/Dispatch" }
+        - type: object
+          properties:
+            events:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  event_type: { type: string }
+                  occurred_at: { type: string, format: date-time }
+    DispatchRequest:
+      type: object
+      required: [tenant_id, event, recipient]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        event: { type: string }
+        recipient:
+          type: object
+          required: [email]
+          properties:
+            email: { type: string, format: email }
+        variables:
+          type: object
+          additionalProperties: true
+        idempotency_key: { type: string }
+    WebhookPayload:
+      type: object
+      required: [provider_message_id, event]
+      properties:
+        provider_message_id: { type: string }
+        event:
+          type: string
+          enum: [delivered, bounced, spam_complaint, failed, sent]
+        occurred_at: { type: string }
+        recipient: { type: string, format: email }
+    LogPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              occurred_at: { type: string, format: date-time }
+              event_name: { type: string }
+              dispatch_id: { type: string, format: uuid }
+              tenant_id: { type: string, format: uuid }
+              dispatch_status: { type: string }
+              recipient: { type: [string, "null"] }
+              event_key: { type: [string, "null"] }
+              correlation_id: { type: [string, "null"] }
+        next_cursor: { type: [string, "null"] }
 security:
   - ApiKeyAuth: []

@@ -27,3 +27,25 @@ export function unauthorized(reply: FastifyReply, message = "Invalid or missing 
 export function serviceUnavailable(reply: FastifyReply, message: string) {
   return reply.status(503).send({ error: "service_unavailable", message });
 }
+
+export function tooManyRequests(reply: FastifyReply, retryAfterSec: number) {
+  return reply
+    .header("Retry-After", String(retryAfterSec))
+    .status(429)
+    .send({
+      error: "rate_limited",
+      message: "Too many requests; try again later.",
+    });
+}
+
+export function unprocessableEntity(
+  reply: FastifyReply,
+  message: string,
+  details?: unknown,
+) {
+  return reply.status(422).send({
+    error: "unprocessable_entity",
+    message,
+    details: details ?? null,
+  });
+}

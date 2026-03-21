@@ -6,6 +6,7 @@ import { Layout } from "./components/Layout";
 import { BrandingPage } from "./pages/BrandingPage";
 import { DomainsPage } from "./pages/DomainsPage";
 import { EventsPage } from "./pages/EventsPage";
+import { LogsPage } from "./pages/LogsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -46,6 +47,7 @@ export function App() {
             <Route path="branding" element={<BrandingPage />} />
             <Route path="templates" element={<TemplatesPage />} />
             <Route path="events" element={<EventsPage />} />
+            <Route path="logs" element={<LogsPage />} />
             <Route path="coming-soon" element={<PlaceholderPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

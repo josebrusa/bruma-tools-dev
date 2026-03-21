@@ -64,6 +64,9 @@ export function Layout() {
           <NavLink to="/events" style={navLinkStyle}>
             Events
           </NavLink>
+          <NavLink to="/logs" style={navLinkStyle}>
+            Logs
+          </NavLink>
           <NavLink to="/coming-soon" style={navLinkStyle}>
             More (soon)
           </NavLink>

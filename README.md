@@ -17,3 +17,7 @@ API defaults to `http://localhost:3000`, dashboard to `http://localhost:5173`. S
 **Staging-style compose:** `docker-compose.staging.yml` documents ports and required env vars (`STAGING_*`); keep real secrets in a manager, not in git.
 
 **Tenant API keys (Sprint 2):** besides `ADMIN_API_KEY`, you can create per-tenant keys via `POST /v1/tenants/:tenantId/api-keys` (returns the secret once). Those keys only allow access to that tenant’s routes.
+
+**OpenAPI (Sprint 5):** with the API running, open `http://localhost:3000/docs` when docs are enabled (default in development; in production set `OPENAPI_DOCS_ENABLED=true` or leave disabled). Spec source: `apps/api/openapi/openapi.yaml`.
+
+**Operators:** see [docs/operator-handover.md](docs/operator-handover.md) and [docs/glossary.md](docs/glossary.md).
