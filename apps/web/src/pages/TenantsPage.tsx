@@ -7,9 +7,11 @@ import {
   type Tenant,
 } from "../api/client";
 import { useAuth } from "../auth/useAuth";
+import { useTenantContext } from "../tenant/useTenantContext";
 
 export function TenantsPage() {
   const { apiKey } = useAuth();
+  const { refreshTenants } = useTenantContext();
   const [tenants, setTenants] = useState<Tenant[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{
@@ -62,6 +64,7 @@ export function TenantsPage() {
       setName("");
       setContact("");
       setBanner({ type: "ok", text: "Tenant created." });
+      void refreshTenants();
     } catch (err) {
       const text =
         err instanceof ApiError ? err.message : "Could not create tenant.";
@@ -87,6 +90,7 @@ export function TenantsPage() {
         prev ? prev.map((x) => (x.id === row.id ? row : x)) : prev,
       );
       setBanner({ type: "ok", text: `Tenant ${label}d.` });
+      void refreshTenants();
     } catch (err) {
       const text =
         err instanceof ApiError ? err.message : `Could not ${label} tenant.`;
@@ -109,6 +113,7 @@ export function TenantsPage() {
       );
       setEdit(null);
       setBanner({ type: "ok", text: "Tenant updated." });
+      void refreshTenants();
     } catch (err) {
       const text =
         err instanceof ApiError ? err.message : "Could not update tenant.";

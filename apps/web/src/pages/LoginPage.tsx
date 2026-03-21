@@ -10,7 +10,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   if (apiKey) {
-    return <Navigate to="/tenants" replace />;
+    return <Navigate to="/overview" replace />;
   }
 
   async function onSubmit(e: FormEvent) {

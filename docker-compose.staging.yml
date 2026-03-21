@@ -1,0 +1,72 @@
+# Staging-oriented stack (parity with production topology). Secrets must be injected via env / secret manager — do not commit `.env.staging` with real values.
+# Usage: `docker compose -f docker-compose.staging.yml --env-file .env.staging.local up --build`
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:-bruma}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:-bruma}
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:-bruma}
+    ports:
+      - "${STAGING_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - staging_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAGING_POSTGRES_USER:-bruma} -d ${STAGING_POSTGRES_DB:-bruma}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${STAGING_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${STAGING_DATABASE_URL}
+      REDIS_URL: ${STAGING_REDIS_URL:-redis://redis:6379}
+      ADMIN_API_KEY: ${STAGING_ADMIN_API_KEY}
+      ALLOWED_ORIGINS: ${STAGING_ALLOWED_ORIGINS}
+    ports:
+      - "${STAGING_API_PORT:-3001}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      REDIS_URL: ${STAGING_REDIS_URL:-redis://redis:6379}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${STAGING_VITE_API_BASE_URL:-http://localhost:3001}
+    ports:
+      - "${STAGING_WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+volumes:
+  staging_pg:

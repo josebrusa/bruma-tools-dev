@@ -1,0 +1,57 @@
+openapi: 3.1.0
+info:
+  title: Bruma API — Sprint 2 fragment
+  version: 0.2.0
+  description: |
+    Senders, branding, templates, tenant API keys, checklist. Same `X-API-Key` auth:
+    - `ADMIN_API_KEY` → full access
+    - Tenant keys (`brk_…`) → single-tenant access (hashed at rest)
+paths:
+  /v1/tenants/{tenantId}/domains:
+    get:
+      summary: List domains
+  /v1/tenants/{tenantId}/setup-checklist:
+    get:
+      summary: Aggregated onboarding checklist flags
+  /v1/tenants/{tenantId}/event-mappings:
+    post:
+      summary: Create stub event mapping (Sprint 2)
+  /v1/tenants/{tenantId}/api-keys:
+    get:
+      summary: List API key metadata (no secrets)
+    post:
+      summary: Issue API key (returns secret once)
+  /v1/tenants/{tenantId}/api-keys/{keyId}:
+    delete:
+      summary: Revoke API key
+  /v1/tenants/{tenantId}/senders:
+    get:
+      summary: List senders
+    post:
+      summary: Create sender (requires verified domain)
+  /v1/tenants/{tenantId}/senders/{senderId}:
+    get:
+      summary: Get sender
+    patch:
+      summary: Update sender
+  /v1/tenants/{tenantId}/branding:
+    get:
+      summary: Get branding profile
+    post:
+      summary: Upsert branding profile
+  /v1/tenants/{tenantId}/templates:
+    get:
+      summary: List templates with active version id
+    post:
+      summary: Create template
+  /v1/tenants/{tenantId}/templates/{templateId}/versions:
+    get:
+      summary: List template versions
+    post:
+      summary: Create template version (Handlebars body)
+  /v1/tenants/{tenantId}/templates/{templateId}/publish:
+    post:
+      summary: Publish a version (sets single active)
+  /v1/tenants/{tenantId}/templates/{templateId}/versions/{versionId}/preview:
+    get:
+      summary: Preview rendered HTML (query `variables` JSON object)

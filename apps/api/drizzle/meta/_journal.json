@@ -8,6 +8,13 @@
       "when": 1774133748188,
       "tag": "0000_sprint1",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774134426976,
+      "tag": "0001_sprint2",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,8 @@ import {
 import { fqdnSchema, normalizeFqdn, slugSchema } from "../lib/tenant-domain.js";
 import { buildDnsBundle } from "../services/dns-records.js";
 import { verifyDomainDns } from "../services/dns-verify.js";
+import { ensureAdmin, ensureTenantAccess } from "../lib/tenant-access.js";
+import { registerSprint2Routes } from "./sprint2.js";
 
 const createTenantBody = z.object({
   slug: slugSchema,
@@ -61,12 +63,23 @@ function mapDomain(row: typeof domains.$inferSelect) {
 }
 
 export async function registerV1Routes(app: FastifyInstance) {
-  app.get("/v1/tenants", async (_req, reply) => {
+  app.get("/v1/tenants", async (req, reply) => {
+    const auth = req.auth;
+    if (!auth) return forbidden(reply, "Missing authorization context");
+    if (auth.kind === "tenant") {
+      const [row] = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.id, auth.tenantId))
+        .limit(1);
+      return reply.send({ data: row ? [mapTenant(row)] : [] });
+    }
     const rows = await db.select().from(tenants).orderBy(asc(tenants.slug));
     return reply.send({ data: rows.map(mapTenant) });
   });
 
   app.post("/v1/tenants", async (req, reply) => {
+    if (!ensureAdmin(req, reply)) return;
     const parsed = createTenantBody.safeParse(req.body);
     if (!parsed.success) {
       return badRequest(reply, "Validation failed", parsed.error.flatten());
@@ -93,6 +106,7 @@ export async function registerV1Routes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>("/v1/tenants/:id", async (req, reply) => {
+    if (!ensureTenantAccess(req, reply, req.params.id)) return;
     const [row] = await db
       .select()
       .from(tenants)
@@ -105,6 +119,7 @@ export async function registerV1Routes(app: FastifyInstance) {
   app.patch<{ Params: { id: string } }>(
     "/v1/tenants/:id",
     async (req, reply) => {
+      if (!ensureTenantAccess(req, reply, req.params.id)) return;
       const parsed = patchTenantBody.safeParse(req.body);
       if (!parsed.success) {
         return badRequest(reply, "Validation failed", parsed.error.flatten());
@@ -141,6 +156,7 @@ export async function registerV1Routes(app: FastifyInstance) {
   app.post<{ Params: { tenantId: string } }>(
     "/v1/tenants/:tenantId/domains",
     async (req, reply) => {
+      if (!ensureTenantAccess(req, reply, req.params.tenantId)) return;
       const [tenantRow] = await db
         .select()
         .from(tenants)
@@ -196,6 +212,7 @@ export async function registerV1Routes(app: FastifyInstance) {
   app.get<{
     Params: { tenantId: string; domainId: string };
   }>("/v1/tenants/:tenantId/domains/:domainId/dns-records", async (req, reply) => {
+    if (!ensureTenantAccess(req, reply, req.params.tenantId)) return;
     const [row] = await db
       .select()
       .from(domains)
@@ -225,6 +242,7 @@ export async function registerV1Routes(app: FastifyInstance) {
   app.post<{
     Params: { tenantId: string; domainId: string };
   }>("/v1/tenants/:tenantId/domains/:domainId/verify", async (req, reply) => {
+    if (!ensureTenantAccess(req, reply, req.params.tenantId)) return;
     const [tenantRow] = await db
       .select()
       .from(tenants)
@@ -283,4 +301,6 @@ export async function registerV1Routes(app: FastifyInstance) {
       .returning();
     return reply.status(422).send(mapDomain(updated!));
   });
+
+  await registerSprint2Routes(app);
 }
