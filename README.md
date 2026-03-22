@@ -4,7 +4,7 @@ Monorepo MVP layout: `apps/api` (HTTP API), `apps/worker` (BullMQ email send wor
 
 ## Local development
 
-1. Copy `.env.example` to `.env` and adjust if needed.
+1. Copy `.env.example` to `.env` at the **repository root** (the API loads this file automatically; you can also use `apps/api/.env` to override).
 2. `pnpm install`
 3. `docker compose up -d postgres redis` (or full stack: `docker compose up --build`)
 4. `pnpm --filter @bruma/api run db:migrate` (applies all SQL in `apps/api/drizzle/`) then `pnpm --filter @bruma/api run dev`

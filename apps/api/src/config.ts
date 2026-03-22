@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 
 function parseOrigins(raw: string | undefined): string[] {
   if (!raw?.trim()) return ["http://localhost:5173"];
