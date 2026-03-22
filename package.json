@@ -6,6 +6,8 @@
     "build": "pnpm -r run build",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test",
-    "test:e2e": "pnpm --filter @bruma/web run test:e2e"
+    "test:e2e": "pnpm --filter @bruma/web run test:e2e",
+    "dev:web": "pnpm --filter @bruma/web run dev",
+    "dev:api": "pnpm --filter @bruma/api run dev"
   }
 }

@@ -8,7 +8,13 @@ Monorepo MVP layout: `apps/api` (HTTP API), `apps/worker` (BullMQ email send wor
 2. `pnpm install`
 3. `docker compose up -d postgres redis` (or full stack: `docker compose up --build`)
 4. `pnpm --filter @bruma/api run db:migrate` (applies all SQL in `apps/api/drizzle/`) then `pnpm --filter @bruma/api run dev`
-5. In another terminal: `pnpm --filter @bruma/web run dev`
+5. In another terminal: `pnpm dev:web` (or `pnpm --filter @bruma/web run dev`)
+
+### Frontend won’t start?
+
+- Run the command **from the repository root** (where `pnpm-workspace.yaml` lives), not inside `apps/web` unless you use `pnpm dev` there after `pnpm install` at the root.
+- **Port 5173 in use:** stop the other process or set `pnpm dev:web -- --port 5174` (Vite forwards extra CLI args).
+- **Blank page / errors:** open the browser devtools console; ensure the API is running on port 3000 if the UI calls `/v1/...` (Vite proxies to `http://localhost:3000`).
 
 API defaults to `http://localhost:3000`, dashboard to `http://localhost:5173`. Set `ADMIN_API_KEY` in `.env` and use it as `X-API-Key` from the web app.
 
